@@ -23,11 +23,20 @@ from keras.optimizers import *
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping, TensorBoard
 # from keras.layers.experimental import preprocessing
 import cv2
+# gpus = tf.config.experimental.list_physical_devices('GPU')
+# if gpus:
+#    tf.config.experimental.set_virtual_device_configuration(gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=55620973696)])
+# physical_devices = tf.config.list_physical_devices('GPU')
+# try:
+#   tf.config.experimental.set_memory_growth(physical_devices[0], True)
+# except:
+#   # Invalid device or cannot modify virtual devices once initialized.
+#   pass
+
+image_count = 20
 
 
 def import_images(path):
-    image_count = 20
-
     x = np.empty((image_count, 240, 240, 155), dtype=np.int32)
     y = np.empty((image_count, 240, 240, 155), dtype=np.int32)
 
@@ -37,7 +46,7 @@ def import_images(path):
     # Aus Liste files .hdr Dateien löschen
     i = 0
 
-    for image_folder in folders[:20]:
+    for image_folder in folders[:image_count]:
         image_path = path + '/' + image_folder + '/' + image_folder
         x[i] = nib.load(image_path + '_flair.nii.gz').get_fdata()
         y[i] = nib.load(image_path + '_seg.nii.gz').get_fdata()
@@ -58,17 +67,19 @@ from keras.utils import to_categorical
 path = './brain_images/'
 x, y = import_images(path)
 
-x_pre = np.zeros((20, 240, 240, 160), dtype=np.int32)
+x_pre = np.zeros((image_count, 240, 240, 160), dtype=np.int32)
 x_pre[:, :, :, 1:156] = x
 x = x_pre
+del x_pre
+x = tf.convert_to_tensor(x,dtype=tf.int32)
 
-y_pre = np.zeros((20, 240, 240, 160), dtype=np.int32)
+y_pre = np.zeros((image_count, 240, 240, 160), dtype=np.int32)
 y_pre[:, :, :, 1:156] = y
 y = y_pre
-
+del y_pre
 # train_y = to_categorical(train_y, num_classes=5)
 y = to_categorical(y, num_classes=5)
-
+y = tf.convert_to_tensor(y,dtype=tf.int32)
 
 # simple 3d
 # create 2D CNN model
@@ -86,29 +97,29 @@ def get_3D_model():
     x = MaxPool3D(pool_size=2)(x)
 
     x = Conv3D(filters=8, kernel_size=3, activation="relu", kernel_initializer=ker_init, padding="same")(x)
-    x = BatchNormalization()(x)
+   # x = BatchNormalization()(x)
     x = Conv3D(filters=8, kernel_size=3, activation="relu", kernel_initializer=ker_init, padding="same")(x)
-    x = BatchNormalization()(x)
+   # x = BatchNormalization()(x)
     x = MaxPool3D(pool_size=2)(x)
 
-    x = Conv3D(filters=8, kernel_size=3, activation="relu", kernel_initializer=ker_init, padding="same")(x)
+    x = Conv3D(filters=16, kernel_size=3, activation="relu", kernel_initializer=ker_init, padding="same")(x)
     x = BatchNormalization()(x)
-    x = Conv3D(filters=8, kernel_size=3, activation="relu", kernel_initializer=ker_init, padding="same")(x)
+    x = Conv3D(filters=16, kernel_size=3, activation="relu", kernel_initializer=ker_init, padding="same")(x)
     x = BatchNormalization()(x)
     x = MaxPool3D(pool_size=1)(x)
 
     # x = layers.Conv2D(filters=16, kernel_size=3, activation="relu")(x)
     x = UpSampling3D()(x)
-    x = Conv3D(filters=8, kernel_size=(3), activation="relu", kernel_initializer=ker_init, padding="same")(x)
+    x = Conv3D(filters=16, kernel_size=(3), activation="relu", kernel_initializer=ker_init, padding="same")(x)
     x = BatchNormalization()(x)
-    x = Conv3D(filters=8, kernel_size=3, activation="relu", kernel_initializer=ker_init, padding="same")(x)
+    x = Conv3D(filters=16, kernel_size=3, activation="relu", kernel_initializer=ker_init, padding="same")(x)
     x = BatchNormalization()(x)
 
     x = UpSampling3D()(x)
-    x = Conv3D(filters=4, kernel_size=3, activation="relu", kernel_initializer=ker_init, padding="same")(x)
+    x = Conv3D(filters=8, kernel_size=3, activation="relu", kernel_initializer=ker_init, padding="same")(x)
     x = BatchNormalization()(x)
     x = Conv3D(filters=4, kernel_size=3, activation="relu", kernel_initializer=ker_init, padding="same")(x)
-    x = BatchNormalization()(x)
+    #x = BatchNormalization()(x)
 
     # x = Conv2DTranspose(filters=1, kernel_size=3, activation="softmax",padding="same")(x)
     # x = Conv2DTranspose(filters=1, kernel_size=3)(x)
@@ -137,7 +148,8 @@ model.compile(loss="categorical_crossentropy", optimizer=Adam(learning_rate=0.00
 
 # tf.keras.metrics.MeanIoU(num_classes=2)]
 
-model.fit(x[:1], y[:1], batch_size=1, epochs=100,
-          validation_data=(x[1:], y[1:]))
+model.fit(x[:15], y[:15],batch_size=1,  epochs=100,
+          validation_data=(x[15:], y[15:])
+         )
 print(x.shape)
 print(np.unique(x))
